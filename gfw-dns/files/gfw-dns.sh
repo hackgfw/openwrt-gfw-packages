@@ -34,26 +34,26 @@ for domain in $domains ; do
 	done
 done
 
-iptables -t mangle -N protectdns 2>/dev/null
+iptables -N protectdns 2>/dev/null
 
 for ip in $badip ; do
 	hexip=$(printf '%02X ' ${ip//./ }; echo)
-	iptables -t mangle -I protectdns -m string --algo bm --hex-string "|$hexip|" --from 60 --to 500  -j DROP
+	iptables -I protectdns -m string --algo bm --hex-string "|$hexip|" --from 60 --to 500  -j DROP
 done
 
-iptables -t mangle -D protectdns -m u32 --u32 "4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0" -j DROP 2>/dev/null
-iptables -t mangle -I protectdns -m u32 --u32 "4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0" -j DROP
+iptables -D protectdns -m u32 --u32 "4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0" -j DROP 2>/dev/null
+iptables -I protectdns -m u32 --u32 "4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0" -j DROP
 
-iptables -t mangle -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
-iptables -t mangle -I INPUT -p udp --sport 53 -j protectdns
-iptables -t mangle -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
-iptables -t mangle -I FORWARD -p udp --sport 53 -j protectdns
+iptables -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
+iptables -I INPUT -p udp --sport 53 -j protectdns
+iptables -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
+iptables -I FORWARD -p udp --sport 53 -j protectdns
 }
 
 delrules()
 {
-iptables -t mangle -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
-iptables -t mangle -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
-iptables -t mangle -F protectdns 2>/dev/null
-iptables -t mangle -X protectdns 2>/dev/null
+iptables -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
+iptables -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
+iptables -F protectdns 2>/dev/null
+iptables -X protectdns 2>/dev/null
 }
