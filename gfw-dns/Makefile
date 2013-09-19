@@ -55,16 +55,16 @@ chkcrontabs=$$(grep "/etc/init.d/gfw-dns start" $${IPKG_INSTROOT}/etc/crontabs/r
 if [ -z "$$chkcrontabs" ]; then
 	echo "0 6 * * * /etc/init.d/gfw-dns start" >> $${IPKG_INSTROOT}/etc/crontabs/root
 fi
-chkfirewall=$$(grep "/etc/init.d/gfw-dns start" $${IPKG_INSTROOT}/etc/firewall.user 2>/dev/null)
+chkfirewall=$$(grep ". /var/g.firewall.user" $${IPKG_INSTROOT}/etc/firewall.user 2>/dev/null)
 if [ -z "$$chkfirewall" ]; then
-	echo "/etc/init.d/gfw-dns start" >> $${IPKG_INSTROOT}/etc/firewall.user
+	echo ". /var/g.firewall.user" >> $${IPKG_INSTROOT}/etc/firewall.user
 fi
 endef
 
 define Package/gfw-dns/postrm
 #!/bin/sh
 sed -i '/gfw-dns/d' $${IPKG_INSTROOT}/etc/crontabs/root 2>/dev/null
-sed -i '/gfw-dns/d' $${IPKG_INSTROOT}/etc/firewall.user 2>/dev/null
+sed -i '/g.firewall.user/d' $${IPKG_INSTROOT}/etc/firewall.user 2>/dev/null
 exit 0
 endef
 

@@ -2,6 +2,8 @@
 
 . /lib/functions.sh
 
+rulefile=/var/g.firewall.user
+
 addrules()
 {
 local domains
@@ -34,20 +36,28 @@ for domain in $domains ; do
 	done
 done
 
-iptables -N protectdns 2>/dev/null
+echo "iptables -N protectdns" >> $rulefile.tmp 
 
 for ip in $badip ; do
 	hexip=$(printf '%02X ' ${ip//./ }; echo)
-	iptables -I protectdns -m string --algo bm --hex-string "|$hexip|" --from 60 --to 500  -j DROP
+	echo "iptables -I protectdns -m string --algo bm --hex-string \"|$hexip|\" --from 60 --to 500  -j DROP" >> $rulefile.tmp 
 done
 
-iptables -D protectdns -m u32 --u32 "4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0" -j DROP 2>/dev/null
-iptables -I protectdns -m u32 --u32 "4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0" -j DROP
+echo "iptables -I protectdns -m u32 --u32 \"4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0\" -j DROP" >> $rulefile.tmp
+echo "iptables -I INPUT -p udp --sport 53 -j protectdns" >> $rulefile.tmp
+echo "iptables -I FORWARD -p udp --sport 53 -j protectdns" >> $rulefile.tmp
 
-iptables -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
-iptables -I INPUT -p udp --sport 53 -j protectdns
-iptables -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
-iptables -I FORWARD -p udp --sport 53 -j protectdns
+if [[ -s $rulefile ]] ; then
+        grep -Fvf $rulefile $rulefile.tmp > $rulefile.action
+        cat $rulefile.action >> $rulefile
+else
+        cp $rulefile.tmp $rulefile
+        cp $rulefile.tmp $rulefile.action
+fi
+
+. $rulefile.action
+rm $rulefile.tmp
+rm $rulefile.action
 }
 
 delrules()
@@ -56,4 +66,5 @@ iptables -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
 iptables -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
 iptables -F protectdns 2>/dev/null
 iptables -X protectdns 2>/dev/null
+rm $rulefile
 }
