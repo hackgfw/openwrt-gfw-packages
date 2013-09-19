@@ -62,7 +62,7 @@ rm $rulefile.action
 
 delrules()
 {
-iptables -D INPUT -p udp --sport 53 -j protectdns 2>/dev/null
+iptables -D INPUT ! -i lo -p udp --sport 53 -j protectdns 2>/dev/null
 iptables -D FORWARD -p udp --sport 53 -j protectdns 2>/dev/null
 iptables -F protectdns 2>/dev/null
 iptables -X protectdns 2>/dev/null
