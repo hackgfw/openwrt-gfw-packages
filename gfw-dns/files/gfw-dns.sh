@@ -44,7 +44,7 @@ for ip in $badip ; do
 done
 
 echo "iptables -I protectdns -m u32 --u32 \"4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0\" -j DROP" >> $rulefile.tmp
-echo "iptables -I INPUT -p udp --sport 53 -j protectdns" >> $rulefile.tmp
+echo "iptables -I INPUT ! -i lo -p udp --sport 53 -j protectdns" >> $rulefile.tmp
 echo "iptables -I FORWARD -p udp --sport 53 -j protectdns" >> $rulefile.tmp
 
 if [[ -s $rulefile ]] ; then
