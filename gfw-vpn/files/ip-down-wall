@@ -1,0 +1,32 @@
+
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
+. /lib/functions.sh
+
+local enabled
+local interface
+
+config_load gfw-vpn
+config_get_bool enabled general enabled
+config_get interface general interface
+interface=$(uci_get_state network "$interface" ifname "$interface")
+
+ip_down_wall() {
+	iptables -t mangle -D PREROUTING -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -D OUTPUT -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -D FORWARD -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -F gfwvpn
+	iptables -t mangle -X gfwvpn
+
+	ip route del table wall default
+	ip rule del priority 1
+}
+
+if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
+	ip_down_wall
+fi

@@ -1,0 +1,69 @@
+
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
+. /lib/functions.sh
+
+local enabled
+local interface
+
+config_load gfw-vpn
+config_get_bool enabled general enabled
+config_get interface general interface
+# wait for /var/state/network
+sleep 1
+interface=$(uci_get_state network "$interface" ifname "$interface")
+
+handle_rule() {
+	local proto
+	local port
+	config_get proto $1 proto
+	config_get port $1 port
+	iptables -t mangle -I gfwvpn -p $proto --dport $port -j MARK --set-mark 0xffff
+}
+
+ip_up_wall() {
+	ip route del default via $PPP_REMOTE
+
+	CHKIPSET=$(ipset -L whitezone | wc -l)
+	if [ "$CHKIPSET" == "0" ]; then
+		ipset -N whitezone nethash --hashsize 32768
+
+		for IP in $(cat /etc/config/gfw-vpn.whitezone)
+		do
+			ipset -A whitezone $IP
+		done
+	fi
+
+	CHKIPSET=$(ipset -L whiteip | wc -l)
+	if [ "$CHKIPSET" == "0" ]; then
+		ipset -N whiteip iphash --hashsize 128
+		for IP in $(cat /etc/config/gfw-vpn.whiteip)
+		do
+			ipset -A whiteip $IP
+		done
+	fi
+
+	iptables -t mangle -N gfwvpn 2>/dev/null
+	iptables -t mangle -F gfwvpn
+	iptables -t mangle -I PREROUTING -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -I OUTPUT -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -I FORWARD -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	config_foreach handle_rule rule
+
+	CHKIPROUTE=$(grep wall /etc/iproute2/rt_tables)
+	if [ -z "$CHKIPROUTE" ]; then
+		echo "11 wall" >> /etc/iproute2/rt_tables
+	fi
+
+	ip route add table wall default via $PPP_LOCAL
+	ip rule add fwmark 0xffff table wall priority 1
+}
+
+if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
+	ip_up_wall
+fi
