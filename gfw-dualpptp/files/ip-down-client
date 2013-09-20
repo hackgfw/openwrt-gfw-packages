@@ -1,0 +1,27 @@
+
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
+. /lib/functions.sh
+
+local enabled
+local interface
+local mtu
+
+config_load gfw-dualpptp
+config_get_bool enabled general enabled
+config_get interface general mainvpnifname
+config_get mtu general mainvpnmtu
+interface=$(uci_get_state network "$interface" ifname "$interface")
+
+ip_down_client() {
+}
+
+if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
+        ip_down_client
+fi
+
