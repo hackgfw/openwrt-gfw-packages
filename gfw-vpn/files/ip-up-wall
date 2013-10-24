@@ -50,9 +50,9 @@ ip_up_wall() {
 
 	iptables -t mangle -N gfwvpn 2>/dev/null
 	iptables -t mangle -F gfwvpn
-	iptables -t mangle -I PREROUTING -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
-	iptables -t mangle -I OUTPUT -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
-	iptables -t mangle -I FORWARD -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -I PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
+	iptables -t mangle -I OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
+	iptables -t mangle -I FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
 	config_foreach handle_rule rule
 
 	CHKIPROUTE=$(grep wall /etc/iproute2/rt_tables)

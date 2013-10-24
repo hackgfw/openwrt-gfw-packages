@@ -17,9 +17,9 @@ config_get interface general interface
 interface=$(uci_get_state network "$interface" ifname "$interface")
 
 ip_down_wall() {
-	iptables -t mangle -D PREROUTING -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
-	iptables -t mangle -D OUTPUT -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
-	iptables -t mangle -D FORWARD -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! whitezone dst -j gfwvpn
+	iptables -t mangle -D PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
+	iptables -t mangle -D OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
+	iptables -t mangle -D FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
 	iptables -t mangle -F gfwvpn
 	iptables -t mangle -X gfwvpn
 
