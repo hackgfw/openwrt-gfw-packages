@@ -8,6 +8,8 @@ PPP_IPPARAM="$6";
 
 . /lib/functions.sh
 
+local rulefile=/var/gfw-vpn.user
+local tmprulefile
 local enabled
 local inited=0
 local mark
@@ -55,11 +57,13 @@ prepare_rule() {
 	fi
 	mark=$CHKIPROUTE
 
-	iptables -t mangle -N gfw$interface 2>/dev/null
-	iptables -t mangle -F gfw$interface
-	iptables -t mangle -I PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
-	iptables -t mangle -I OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
-	iptables -t mangle -I FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+	tmprulefile=$rulefile.gfw$interface.tmp
+
+	echo "iptables -t mangle -N gfw$interface 2>/dev/null" >> $tmprulefile
+	echo "iptables -t mangle -F gfw$interface" >> $tmprulefile
+	echo "iptables -t mangle -I PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface" >> $tmprulefile
+	echo "iptables -t mangle -I OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface" >> $tmprulefile
+	echo "iptables -t mangle -I FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface" >> $tmprulefile
 
 	ip route add table gfw$interface default via $PPP_LOCAL
 	ip rule add fwmark $mark table gfw$interface priority $mark
@@ -78,12 +82,20 @@ handle_rule() {
 	realif=$(uci_get_state network "$interface" ifname "$interface")
 	if [ "$PPP_IFACE" == "$realif" ]; then
 		prepare_rule $interface
-		iptables -t mangle -I gfw$interface -p $proto --dport $port -j MARK --set-mark $mark
+		echo "iptables -t mangle -I gfw$interface -p $proto --dport $port -j MARK --set-mark $mark" >> $tmprulefile
 	fi
 }
 
 ip_up_wall() {
 	config_foreach handle_rule rule
+
+	if [ -z "$tmprulefile" ]; then
+		return
+	fi
+
+	cat $tmprulefile >> $rulefile
+	. $tmprulefile
+	rm $tmprulefile
 }
 
 if [ $enabled -eq 1 ]; then

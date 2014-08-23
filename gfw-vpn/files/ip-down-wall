@@ -8,6 +8,7 @@ PPP_IPPARAM="$6";
 
 . /lib/functions.sh
 
+local rulefile=/var/gfw-vpn.user
 local enabled
 local deleted=0
 local mark
@@ -27,6 +28,9 @@ delete_rule() {
 	iptables -t mangle -D FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
 	iptables -t mangle -F gfw$interface
 	iptables -t mangle -X gfw$interface
+
+	sed -i "/gfw$interface\$/d" $rulefile
+	sed -i "/gfw$interface /d" $rulefile
 
 	ip route del table gfw$interface default
 	ip rule del priority $mark
