@@ -9,24 +9,18 @@ PPP_IPPARAM="$6";
 . /lib/functions.sh
 
 local enabled
-local interface
+local inited=0
+local mark
 
 config_load gfw-vpn
 config_get_bool enabled general enabled
-config_get interface general interface
 # wait for /var/state/network
 sleep 1
-interface=$(uci_get_state network "$interface" ifname "$interface")
 
-handle_rule() {
-	local proto
-	local port
-	config_get proto $1 proto
-	config_get port $1 port
-	iptables -t mangle -I gfwvpn -p $proto --dport $port -j MARK --set-mark 0xffff
-}
+prepare_rule() {
+	[ $inited -eq 1 ] && return
 
-ip_up_wall() {
+	local interface=$1
 	ip route del default via $PPP_REMOTE
 
 	CHKIPSET=$(ipset -L whitezone | wc -l)
@@ -48,22 +42,50 @@ ip_up_wall() {
 		done
 	fi
 
-	iptables -t mangle -N gfwvpn 2>/dev/null
-	iptables -t mangle -F gfwvpn
-	iptables -t mangle -I PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
-	iptables -t mangle -I OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
-	iptables -t mangle -I FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
-	config_foreach handle_rule rule
-
-	CHKIPROUTE=$(grep wall /etc/iproute2/rt_tables)
+	CHKIPROUTE=$(grep gfw$interface /etc/iproute2/rt_tables | cut -f1)
 	if [ -z "$CHKIPROUTE" ]; then
-		echo "11 wall" >> /etc/iproute2/rt_tables
+		for i in $(seq 101 250) ; do
+			CHKIPROUTE=$(grep $i /etc/iproute2/rt_tables)
+			if [ -z "$CHKIPROUTE" ]; then
+				echo -e "$i\tgfw$interface" >> /etc/iproute2/rt_tables
+				CHKIPROUTE="$i"
+				break
+			fi
+		done
 	fi
+	mark=$CHKIPROUTE
 
-	ip route add table wall default via $PPP_LOCAL
-	ip rule add fwmark 0xffff table wall priority 1
+	iptables -t mangle -N gfw$interface 2>/dev/null
+	iptables -t mangle -F gfw$interface
+	iptables -t mangle -I PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+	iptables -t mangle -I OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+	iptables -t mangle -I FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+
+	ip route add table gfw$interface default via $PPP_LOCAL
+	ip rule add fwmark $mark table gfw$interface priority $mark
+
+	inited=1
 }
 
-if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
+handle_rule() {
+	local interface
+	local proto
+	local port
+	local realif
+	config_get interface $1 interface
+	config_get proto $1 proto
+	config_get port $1 port
+	realif=$(uci_get_state network "$interface" ifname "$interface")
+	if [ "$PPP_IFACE" == "$realif" ]; then
+		prepare_rule $interface
+		iptables -t mangle -I gfw$interface -p $proto --dport $port -j MARK --set-mark $mark
+	fi
+}
+
+ip_up_wall() {
+	config_foreach handle_rule rule
+}
+
+if [ $enabled -eq 1 ]; then
 	ip_up_wall
 fi

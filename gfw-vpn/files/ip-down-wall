@@ -9,24 +9,49 @@ PPP_IPPARAM="$6";
 . /lib/functions.sh
 
 local enabled
-local interface
+local deleted=0
+local mark
 
 config_load gfw-vpn
 config_get_bool enabled general enabled
-config_get interface general interface
-interface=$(uci_get_state network "$interface" ifname "$interface")
 
-ip_down_wall() {
-	iptables -t mangle -D PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
-	iptables -t mangle -D OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
-	iptables -t mangle -D FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfwvpn
-	iptables -t mangle -F gfwvpn
-	iptables -t mangle -X gfwvpn
+delete_rule() {
+	[ $deleted -eq 1 ] && return
 
-	ip route del table wall default
-	ip rule del priority 1
+	local interface=$1
+
+	mark=$(grep gfw$interface /etc/iproute2/rt_tables | cut -f1)
+
+	iptables -t mangle -D PREROUTING -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+	iptables -t mangle -D OUTPUT -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+	iptables -t mangle -D FORWARD -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set whitezone dst -j gfw$interface
+	iptables -t mangle -F gfw$interface
+	iptables -t mangle -X gfw$interface
+
+	ip route del table gfw$interface default
+	ip rule del priority $mark
+
+	deleted=1
 }
 
-if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
+handle_rule() {
+	local interface
+	local proto
+	local port
+	local realif
+	config_get interface $1 interface
+	config_get proto $1 proto
+	config_get port $1 port
+	realif=$(uci_get_state network "$interface" ifname "$interface")
+	if [ "$PPP_IFACE" == "$realif" ]; then
+		delete_rule $interface
+	fi
+}
+
+ip_down_wall() {
+	config_foreach handle_rule rule
+}
+
+if [ $enabled -eq 1 ]; then
 	ip_down_wall
 fi
