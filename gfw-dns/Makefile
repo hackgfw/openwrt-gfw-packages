@@ -8,7 +8,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=gfw-dns
-PKG_VERSION:=0.1.1
+PKG_VERSION:=0.1.2
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_BUILD_DEPENDS += +dnsmasq +firewall
 
