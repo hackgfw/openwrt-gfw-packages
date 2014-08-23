@@ -57,7 +57,7 @@ if [ -z "$$chkcrontabs" ]; then
 fi
 chkfirewall=$$(grep ". /var/g.firewall.user" $${IPKG_INSTROOT}/etc/firewall.user 2>/dev/null)
 if [ -z "$$chkfirewall" ]; then
-	echo ". /var/g.firewall.user" >> $${IPKG_INSTROOT}/etc/firewall.user
+	echo "[[ -s /var/g.firewall.user ]] && . /var/g.firewall.user" >> $${IPKG_INSTROOT}/etc/firewall.user
 fi
 exit 0
 endef
