@@ -59,6 +59,7 @@ chkfirewall=$$(grep ". /var/g.firewall.user" $${IPKG_INSTROOT}/etc/firewall.user
 if [ -z "$$chkfirewall" ]; then
 	echo ". /var/g.firewall.user" >> $${IPKG_INSTROOT}/etc/firewall.user
 fi
+exit 0
 endef
 
 define Package/gfw-dns/postrm
