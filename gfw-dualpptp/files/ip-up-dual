@@ -8,64 +8,102 @@ PPP_IPPARAM="$6";
 
 . /lib/functions.sh
 
+local rulefile=/var/gfw-dualpptp.user
+local tmprulefile
 local enabled
-local interface
-local mtu
-local mainiface
-local mainaddress
+local inited=0
 
 config_load gfw-dualpptp
 config_get_bool enabled general enabled
-config_get interface general secondaryvpnifname
-config_get mtu general secondaryvpnmtu
-config_get mainiface general mainvpnifname
-config_load network
-config_get mainaddress $mainiface server
 # wait for /var/state/network
 sleep 1
-interface=$(uci_get_state network "$interface" ifname "$interface")
 
-ip_up_cdual() {
-        ifconfig $PPP_IFACE mtu $mtu
-
-        iptables -I INPUT -p 47 -i $PPP_IFACE -j ACCEPT
-        iptables -I INPUT -p tcp --sport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -I INPUT -p tcp --dport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -I FORWARD -p 47 -o $PPP_IFACE -j ACCEPT
-        iptables -I FORWARD -p tcp --sport 1723 -o $PPP_IFACE -j ACCEPT
-        iptables -I FORWARD -p tcp --dport 1723 -o $PPP_IFACE -j ACCEPT
-
-        iptables -t mangle -N dupgre
-        iptables -t mangle -I OUTPUT -p 47 -d $mainaddress -m u32 --u32 "0>>22&0x3C@4>>16=0x1:0xFFFF" -j dupgre
-
-        iptables -t mangle -N duptcp
-        iptables -t mangle -I OUTPUT -p tcp --sport 1723 -d $mainaddress -j duptcp
-        iptables -t mangle -I OUTPUT -p tcp --dport 1723 -d $mainaddress -j duptcp
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I duptcp -m u32 --u32 "0>>22&0x3C@12>>26&0x3C@2>>16=0x1 && 0>>22&0x3C@12>>26&0x3C@8>>16=0x5:0x6" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8=0xFF03C021 && 0>>22&0x3C@12>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12=0xFF03C021 && 0>>22&0x3C@16>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12=0xFF03C021 && 0>>22&0x3C@16>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16=0xFF03C021 && 0>>22&0x3C@20>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
+handle_interface() {
+	local interface
+	local mtu
+	local realif
+	config_get interface $1 interface
+	config_get mtu $1 mtu
+	realif=$(uci_get_state network "$interface" ifname "$interface")
+	if [ "$PPP_IFACE" == "$realif" ]; then
+		ifconfig $PPP_IFACE mtu $mtu
+	fi
 }
 
-if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
-        ip_up_cdual
+prepare_rule() {
+	[ $inited -eq 1 ] && return
+
+	local interface=$1
+	tmprulefile=$rulefile.gfw$interface.tmp
+
+	echo "iptables -I INPUT -p 47 -i $PPP_IFACE -j ACCEPT" >> $tmprulefile
+	echo "iptables -I INPUT -p tcp --sport 1723 -i $PPP_IFACE -j ACCEPT" >> $tmprulefile
+	echo "iptables -I INPUT -p tcp --dport 1723 -i $PPP_IFACE -j ACCEPT" >> $tmprulefile
+	echo "iptables -I FORWARD -p 47 -o $PPP_IFACE -j ACCEPT" >> $tmprulefile
+	echo "iptables -I FORWARD -p tcp --sport 1723 -o $PPP_IFACE -j ACCEPT" >> $tmprulefile
+	echo "iptables -I FORWARD -p tcp --dport 1723 -o $PPP_IFACE -j ACCEPT" >> $tmprulefile
+
+	echo "iptables -t mangle -N dup_${interface}_gre 2>/dev/null" >> $tmprulefile
+	echo "iptables -t mangle -N dup_${interface}_tcp 2>/dev/null" >> $tmprulefile
+	echo "iptables -t mangle -F dup_${interface}_gre" >> $tmprulefile
+	echo "iptables -t mangle -F dup_${interface}_tcp" >> $tmprulefile
+
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8>>24=0xFD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12>>24=0xFD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12>>24=0xFD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16>>24=0xFD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8=0xFF0300FD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12=0xFF0300FD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12=0xFF0300FD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16=0xFF0300FD\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+
+	echo "iptables -t mangle -I dup_${interface}_tcp -m u32 --u32 \"0>>22&0x3C@12>>26&0x3C@2>>16=0x1 && 0>>22&0x3C@12>>26&0x3C@8>>16=0x5:0x6\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8>>8=0xC02109:0xC0210A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12>>8=0xC02109:0xC0210A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12>>8=0xC02109:0xC0210A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16>>8=0xC02109:0xC0210A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8=0xFF03C021 && 0>>22&0x3C@12>>24=0x09:0x0A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12=0xFF03C021 && 0>>22&0x3C@16>>24=0x09:0x0A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12=0xFF03C021 && 0>>22&0x3C@16>>24=0x09:0x0A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+	echo "iptables -t mangle -I dup_${interface}_gre -m u32 --u32 \"0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16=0xFF03C021 && 0>>22&0x3C@20>>24=0x09:0x0A\" -j TEE --gateway $PPP_REMOTE" >> $tmprulefile
+
+	inited=1
+}
+
+handle_dual() {
+	local mainvpn
+	local secondaryvpn
+	local realif
+	local mainaddress
+	config_get mainvpn $1 mainvpn
+	config_get secondaryvpn $1 secondaryvpn
+	realif=$(uci_get_state network "$secondaryvpn" ifname "$secondaryvpn")
+	if [ "$PPP_IFACE" == "$realif" ]; then
+		prepare_rule $secondaryvpn
+		mainaddress=$(uci_get network $mainvpn server)
+		echo "iptables -t mangle -I OUTPUT -p 47 -d $mainaddress -m u32 --u32 \"0>>22&0x3C@4>>16=0x1:0xFFFF\" -j dup_${secondaryvpn}_gre" >> $tmprulefile
+		echo "iptables -t mangle -I OUTPUT -p tcp --sport 1723 -d $mainaddress -j dup_${secondaryvpn}_tcp" >> $tmprulefile
+		echo "iptables -t mangle -I OUTPUT -p tcp --dport 1723 -d $mainaddress -j dup_${secondaryvpn}_tcp" >> $tmprulefile
+	fi
+}
+
+ip_up_dual() {
+	config_foreach handle_interface interface
+	config_foreach handle_dual dual
+
+	if [ -z "$tmprulefile" ]; then
+		return
+	fi
+
+	cat $tmprulefile >> $rulefile
+	. $tmprulefile
+	rm $tmprulefile
+}
+
+if [ $enabled -eq 1 ]; then
+	ip_up_dual
 fi
 

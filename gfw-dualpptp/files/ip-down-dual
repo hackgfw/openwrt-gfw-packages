@@ -8,40 +8,65 @@ PPP_IPPARAM="$6";
 
 . /lib/functions.sh
 
+local rulefile=/var/gfw-dualpptp.user
 local enabled
-local interface
-local mtu
-local mainiface
-local mainaddress
+local deleted=0
+local chainname
 
 config_load gfw-dualpptp
 config_get_bool enabled general enabled
-config_get interface general secondaryvpnifname
-config_get mtu general secondaryvpnmtu
-config_get mainiface general mainvpnifname
-config_load network
-config_get mainaddress $mainiface server
-interface=$(uci_get_state network "$interface" ifname "$interface")
 
-ip_down_cdual() {
-        iptables -D INPUT -p 47 -i $PPP_IFACE -j ACCEPT
-        iptables -D INPUT -p tcp --sport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -D INPUT -p tcp --dport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -D FORWARD -p 47 -o $PPP_IFACE -j ACCEPT
-        iptables -D FORWARD -p tcp --sport 1723 -o $PPP_IFACE -j ACCEPT
-        iptables -D FORWARD -p tcp --dport 1723 -o $PPP_IFACE -j ACCEPT
+delete_dual() {
+	[ $deleted -eq 1 ] && return
 
-        iptables -t mangle -D OUTPUT -p 47 -d $mainaddress -m u32 --u32 "0>>22&0x3C@4>>16=0x1:0xFFFF" -j dupgre
-        iptables -t mangle -F dupgre
-        iptables -t mangle -X dupgre
+	local interface=$1
 
-        iptables -t mangle -D OUTPUT -p tcp --sport 1723 -d $mainaddress -j duptcp
-        iptables -t mangle -D OUTPUT -p tcp --dport 1723 -d $mainaddress -j duptcp
-        iptables -t mangle -F duptcp
-        iptables -t mangle -X duptcp
+	iptables -D INPUT -p 47 -i $PPP_IFACE -j ACCEPT
+	iptables -D INPUT -p tcp --sport 1723 -i $PPP_IFACE -j ACCEPT
+	iptables -D INPUT -p tcp --dport 1723 -i $PPP_IFACE -j ACCEPT
+	iptables -D FORWARD -p 47 -o $PPP_IFACE -j ACCEPT
+	iptables -D FORWARD -p tcp --sport 1723 -o $PPP_IFACE -j ACCEPT
+	iptables -D FORWARD -p tcp --dport 1723 -o $PPP_IFACE -j ACCEPT
+
+	iptables -t mangle -F dup_${interface}_gre
+	iptables -t mangle -F dup_${interface}_tcp
+
+	sed -i "/ $PPP_IFACE /d" $rulefile
+	sed -i "/dup_${interface}_/d" $rulefile
+
+	chainname=$interface
+	deleted=1
 }
 
-if [ "$PPP_IFACE" == "$interface" -a $enabled -eq 1 ]; then
-        ip_down_cdual
+handle_dual() {
+	local mainvpn
+	local secondaryvpn
+	local realif
+	local mainaddress
+	config_get mainvpn $1 mainvpn
+	config_get secondaryvpn $1 secondaryvpn
+	realif=$(uci_get_state network "$secondaryvpn" ifname "$secondaryvpn")
+	if [ "$PPP_IFACE" == "$realif" ]; then
+		delete_dual $secondaryvpn
+		mainaddress=$(uci_get network $mainvpn server)
+		iptables -t mangle -D OUTPUT -p 47 -d $mainaddress -m u32 --u32 "0>>22&0x3C@4>>16=0x1:0xFFFF" -j dup_${secondaryvpn}_gre
+		iptables -t mangle -D OUTPUT -p tcp --sport 1723 -d $mainaddress -j dup_${secondaryvpn}_tcp
+		iptables -t mangle -D OUTPUT -p tcp --dport 1723 -d $mainaddress -j dup_${secondaryvpn}_tcp
+	fi
+}
+
+ip_down_dual() {
+	config_foreach handle_dual dual
+
+	if [ -z "$chainname" ]; then
+		return
+	fi
+
+	iptables -t mangle -X dup_${chainname}_gre
+	iptables -t mangle -X dup_${chainname}_tcp
+}
+
+if [ $enabled -eq 1 ]; then
+	ip_down_dual
 fi
 
