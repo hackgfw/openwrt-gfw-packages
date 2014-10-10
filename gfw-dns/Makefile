@@ -59,6 +59,7 @@ chkfirewall=$$(grep ". /var/g.firewall.user" $${IPKG_INSTROOT}/etc/firewall.user
 if [ -z "$$chkfirewall" ]; then
 	echo "[[ -s /var/g.firewall.user ]] && . /var/g.firewall.user" >> $${IPKG_INSTROOT}/etc/firewall.user
 fi
+sed -i '/net.netfilter.nf_conntrack_skip_filter.*=.*1/c\net.netfilter.nf_conntrack_skip_filter=0' $${IPKG_INSTROOT}/etc/sysctl.conf
 exit 0
 endef
 
