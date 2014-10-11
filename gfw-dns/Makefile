@@ -18,6 +18,7 @@ define Package/gfw-dns
   SECTION:=net
   CATEGORY:=Network
   DEPENDS += +bind-dig +iptables-mod-filter +iptables-mod-u32 +dnsmasq +firewall
+  PKGARCH:=all
   TITLE:=AntiDNSPoisoning
   URL:=https://github.com/hackgfw/openwrt-gfw/
   MAINTAINER:=hackgfw <hackgfw@aim.com>

@@ -17,6 +17,7 @@ define Package/gfw-dualpptp
   SECTION:=net
   CATEGORY:=Network
   DEPENDS += +ip +iptables-mod-tee +iptables-mod-u32
+  PKGARCH:=all
   TITLE:=VPN script to use redundant connecions
   URL:=https://github.com/hackgfw/openwrt-gfw/
   MAINTAINER:=hackgfw <hackgfw@aim.com>

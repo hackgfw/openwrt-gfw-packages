@@ -17,6 +17,7 @@ define Package/gfw-vpn
   SECTION:=net
   CATEGORY:=Network
   DEPENDS += +ip +ipset +iptables-mod-ipopt
+  PKGARCH:=all
   TITLE:=VPN script to tear down gfw
   URL:=https://github.com/hackgfw/openwrt-gfw/
   MAINTAINER:=hackgfw <hackgfw@aim.com>
