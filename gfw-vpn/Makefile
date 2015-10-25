@@ -16,7 +16,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/gfw-vpn
   SECTION:=net
   CATEGORY:=Network
-  DEPENDS += +ip +ipset +iptables-mod-ipopt
+  DEPENDS += +ip +ipset +iptables-mod-ipopt +conntrack-tools
   PKGARCH:=all
   TITLE:=VPN script to tear down gfw
   URL:=https://github.com/hackgfw/openwrt-gfw/

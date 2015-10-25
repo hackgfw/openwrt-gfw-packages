@@ -11,11 +11,13 @@ PPP_IPPARAM="$6";
 local rulefile=/var/gfw-vpn.user
 local tmprulefile
 local enabled
+local flush_conntrack
 local inited=0
 local mark
 
 config_load gfw-vpn
 config_get_bool enabled general enabled
+config_get_bool flush_conntrack general flush_conntrack
 # wait for /var/state/network
 sleep 1
 
@@ -96,6 +98,10 @@ ip_up_wall() {
 	cat $tmprulefile >> $rulefile
 	. $tmprulefile
 	rm $tmprulefile
+
+	if [ $flush_conntrack -eq 1 ]; then
+		conntrack -D -p udp
+	fi
 }
 
 if [ $enabled -eq 1 ]; then

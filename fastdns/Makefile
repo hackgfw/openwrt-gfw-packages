@@ -8,11 +8,11 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=fastdns
-PKG_VERSION:=0.1.3
+PKG_VERSION:=0.1.4
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/hackgfw/fastdns/releases/download/v$(PKG_VERSION)/
-PKG_MD5SUM:=894bfa151ddcdd8e74e910dd585a67f6
+PKG_MD5SUM:=bb8abbe617b0892a47c31571a1599dd2
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk

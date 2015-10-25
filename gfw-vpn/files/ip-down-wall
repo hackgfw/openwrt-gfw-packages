@@ -10,11 +10,13 @@ PPP_IPPARAM="$6";
 
 local rulefile=/var/gfw-vpn.user
 local enabled
+local flush_conntrack
 local deleted=0
 local mark
 
 config_load gfw-vpn
 config_get_bool enabled general enabled
+config_get_bool flush_conntrack general flush_conntrack
 
 delete_rule() {
 	[ $deleted -eq 1 ] && return
@@ -54,6 +56,11 @@ handle_rule() {
 
 ip_down_wall() {
 	config_foreach handle_rule rule
+
+	[ $deleted -eq 0 ] && return
+	if [ $flush_conntrack -eq 1 ]; then
+		conntrack -D -np udp -q $PPP_LOCAL
+	fi
 }
 
 if [ $enabled -eq 1 ]; then
